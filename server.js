@@ -157,7 +157,7 @@ app.post('/send', authenticate, async (req, res) => {
   }
 });
 
-// Health check
+
 app.get('/', (req, res) => {
   res.json({ 
     service: 'CrewFund WhatsApp Server',
