@@ -1,0 +1,12 @@
+services:
+  - type: web
+    name: crewfund-whatsapp
+    env: node
+    plan: free
+    buildCommand: npm install && npx puppeteer browsers install chrome
+    startCommand: node server.js
+    envVars:
+      - key: API_SECRET
+        sync: false
+      - key: PUPPETEER_SKIP_CHROMIUM_DOWNLOAD
+        value: false
