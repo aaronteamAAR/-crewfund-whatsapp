@@ -166,6 +166,16 @@ app.get('/', (req, res) => {
   });
 });
 
+// Keep-alive ping to prevent Render from spinning down
+const RENDER_URL = process.env.RENDER_URL;
+if (RENDER_URL) {
+  setInterval(() => {
+    fetch(`${RENDER_URL}/status`)
+      .then(() => console.log('[KEEPALIVE] Pinged successfully'))
+      .catch(err => console.log('[KEEPALIVE] Ping failed:', err.message));
+    }, 10 * 60 * 1000); // ping every 10 minutes
+}
+
 const PORT = process.env.PORT || 3001;
 app.listen(PORT, () => {
   console.log(`CrewFund WhatsApp server running on port ${PORT}`);
