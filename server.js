@@ -22,39 +22,48 @@ function authenticate(req, res, next) {
   next();
 }
 
+let startAttempt = 0;
+let lastError = null;
+
 // Initialize WPPConnect
 async function startClient() {
+  startAttempt++;
+  console.log(`[WPP] Starting client (attempt ${startAttempt})...`);
   try {
     client = await wppconnect.create({
       session: 'crewfund',
-      catchQR: (base64Qr) => {
+      catchQR: (base64Qr, asciiQR, attempts) => {
         qrCodeData = base64Qr;
         isReady = false;
-        console.log('QR Code generated — scan it at /qr');
+        console.log(`[WPP] QR Code generated (attempt ${attempts}) — visit /qr to scan`);
       },
-      statusFind: (statusSession) => {
-        console.log('Status:', statusSession);
+      statusFind: (statusSession, session) => {
+        console.log(`[WPP] Status: ${statusSession} (session: ${session})`);
         if (statusSession === 'isLogged' || statusSession === 'qrReadSuccess') {
           isReady = true;
           qrCodeData = null;
-          console.log('WhatsApp connected and ready');
+          console.log('[WPP] WhatsApp connected and ready');
+        } else if (statusSession === 'browserClose' || statusSession === 'desconnectedMobile' || statusSession === 'deleteToken') {
+          isReady = false;
+          console.log('[WPP] Disconnected — restarting in 5s');
+          setTimeout(startClient, 5000);
         }
       },
+      waitForLogin: false,
       headless: true,
       devtools: false,
       useChrome: false,
       debug: false,
       logQR: false,
-      browserWS: '',
       browserArgs: [
         '--no-sandbox',
         '--disable-setuid-sandbox',
         '--disable-dev-shm-usage',
         '--disable-accelerated-2d-canvas',
         '--no-first-run',
-        '--no-zygote',
-        '--single-process',
-        '--disable-gpu'
+        '--disable-gpu',
+        '--disable-extensions',
+        '--disable-background-networking',
       ],
       puppeteerOptions: {},
       disableWelcome: true,
@@ -64,9 +73,10 @@ async function startClient() {
       folderNameToken: './tokens',
     });
 
-    console.log('WPPConnect client created');
+    console.log('[WPP] Client created successfully');
   } catch (err) {
-    console.error('Error starting client:', err);
+    lastError = err.message;
+    console.error('[WPP] Error starting client:', err.message);
     setTimeout(startClient, 5000);
   }
 }
@@ -97,7 +107,23 @@ app.get('/status', (req, res) => {
   res.json({
     connected: isReady,
     hasQR: !!qrCodeData,
+    startAttempt,
+    lastError,
   });
+});
+
+// GET /restart — force a new session
+app.get('/restart', async (req, res) => {
+  console.log('[WPP] Manual restart requested');
+  isReady = false;
+  qrCodeData = null;
+  lastError = null;
+  if (client) {
+    try { await client.close(); } catch (_) {}
+    client = null;
+  }
+  startClient();
+  res.json({ status: 'restarting' });
 });
 
 // POST /send — send a WhatsApp message
